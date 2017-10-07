@@ -74,7 +74,11 @@ object Bot extends App with UserMonitor.ActionHandler {
             case _ => muteRolPerChannel(channel) = setupMuteRolForChannel(channel)
           }
         }
-        println(Console.GREEN + s"Initialized.\n  Audit channel: ${auditChannel.getName}\n  Moderator role: ${moderatorRole.getName}\n  Timeout sequence: ${timeoutsSequence mkString ", "}" + Console.RESET)
+        println(Console.GREEN + s"""Initialized.
+  Audit channel: ${auditChannel.getName}
+  Moderator role: ${moderatorRole.getName}
+  Timeout sequence: ${timeoutsSequence mkString ", "}
+  Required reports for timeout: $requiredReports""" + Console.RESET)
         
       case evt: ChannelCreateEvent => muteRolPerChannel(evt.getChannel) = setupMuteRolForChannel(evt.getChannel)
       case evt: ChannelDeleteEvent => muteRolPerChannel -= evt.getChannel
