@@ -228,9 +228,11 @@ object Bot extends App with UserMonitor.ActionHandler {
   override def muteUser(user: IUser, channel: IChannel, duration: FiniteDuration, reports: Seq[IMessage]) = {
     user.addRole(muteRolPerChannel(channel))
     auditChannel.sendMessage(s"User ${user.getName} muted in channel ${channel.mention} for $duration. Reported by\n" + reports.map(_.getAuthor.getName).mkString("\n"))
-    user.getOrCreatePMChannel().sendMessage("You have been muted in ${channel.mention} for $duration after repeated reports.\n" +
-                                            "If you consider this to be wrong, you can ask for an appealing processing by sending to me" +
-                                            "```appeal ${channel.getStringID}```")
+    if (!user.isBot) {
+      user.getOrCreatePMChannel().sendMessage("You have been muted in ${channel.mention} for $duration after repeated reports.\n" +
+                                              "If you consider this to be wrong, you can ask for an appealing processing by sending to me" +
+                                              "```appeal ${channel.getStringID}```")
+    }
   }
   override def unmuteUser(user: IUser, channel: IChannel, message: IMessage) = {
     user.removeRole(muteRolPerChannel(channel))
