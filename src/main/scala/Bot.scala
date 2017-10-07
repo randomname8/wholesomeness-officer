@@ -238,7 +238,7 @@ object Bot extends App with UserMonitor.ActionHandler {
     
   }
   override def warnUser(user: IUser, message: IMessage) = {
-    message.addReaction(ReactionEmoji of "🚦")
+    message.addReaction(ReactionEmoji of "⚠")
   }
   def appealUser(user: IUser, channel: IChannel, message: IMessage): Unit = {
     message.reply("Appeal process initiated. You'll have to wait for the team of moderators to review your case.")
