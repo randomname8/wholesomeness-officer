@@ -121,7 +121,7 @@ object Bot extends App with UserMonitor.ActionHandler {
           case None => msg.reply("Message not found.")
           case Some(reportedMsg) =>
             val reportedUser = reportedMsg.getAuthor
-            val monitor = userMonitors.getOrElseUpdate(reportedUser, TrieMap()).getOrElse(
+            val monitor = userMonitors.getOrElseUpdate(reportedUser, TrieMap()).getOrElseUpdate(
               reportedMsg.getChannel, actorSystem.actorOf(UserMonitor.props(reportedUser, reportedMsg.getChannel, requiredReports, Bot.this, timeoutsSequence)))
             monitor ! UserMonitor.Reported(reportedMsg)
             msg.reply(s"User ${reportedUser.getName} reported")
