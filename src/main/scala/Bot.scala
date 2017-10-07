@@ -118,6 +118,19 @@ object Bot extends App with UserMonitor.ActionHandler {
   
   Command("unmute <userId> <channelId>", "Unmutes a timed out user", requiresModerator = true)(msg => {
       case gr"""unmute $userStrId(\d+) $channelStrId(\d+)""" if msg.getAuthor.hasRole(moderatorRole) =>
+        val validation = 
+          for {
+            user <- Option(theGuild.getUserByID(userStrId.toLong)) toRight "User not found"
+            channel <- Option(theGuild.getChannelByID(channelStrId.toLong)) toRight "Channel not found"
+          } yield {
+            userMonitors.get(user) flatMap (_.get(channel)) match {
+              case Some(monitor) => monitor ! UserMonitor.Unmute(msg)
+              case _ => notifyUserNotTimedOut(user, msg, channel)
+            }
+          }
+        
+        validation.left.foreach(res => msg.reply(res))
+        
     })
   
   Command("list muted", "Shows all the people that are muted per channel", requiresModerator = true)(msg => {
@@ -180,7 +193,7 @@ object Bot extends App with UserMonitor.ActionHandler {
     
   }
   override def notifyUserNotTimedOut(user: IUser, message: IMessage, channel: IChannel) = {
-    
+      message.reply(s"User ${user.getName} is not timed out in channel ${channel.getName}")
   }
   
 //  def appeal(request: IMessage, timeout: TimedOut): Unit = {
