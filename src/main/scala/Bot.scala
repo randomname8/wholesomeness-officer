@@ -33,7 +33,7 @@ object Bot extends App with UserMonitor.ActionHandler {
   val muteRolPerChannel = TrieMap[IChannel, IRole]()
   val userMonitors = TrieMap[IUser, TrieMap[IChannel, ActorRef]]()
   lazy val auditChannel = theGuild.getChannelByID(botConfig.getLong("bot.auditChannel"))
-  lazy val moderatorRole = theGuild.getRoleByID(botConfig.getLong("bot.moderatorRol"))
+  lazy val moderatorRole = theGuild.getRolesByName(botConfig.getString("bot.moderatorRol")).get(0)
   val requiredReports = botConfig.getInt("bot.requiredReports")
   val timeoutsSequence = botConfig.getStringList("bot.timeoutsSequence").asScala.map(Duration.apply).collect { case d: FiniteDuration => d }.toSeq
   
