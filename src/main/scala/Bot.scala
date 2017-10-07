@@ -91,7 +91,7 @@ object Bot extends App with UserMonitor.ActionHandler {
         }
         
       case evt: MessageReceivedEvent =>
-        val content = evt.getMessage.getContent.replaceFirst(raw"""^\Q${client.getOurUser.mention}\E\s+""", "")
+        val content = evt.getMessage.getContent.replaceFirst(raw"""^\Q${client.getOurUser.mention(false)}\E\s+""", "")
         val mentionsMe = content.length != evt.getMessage.getContent.length
         
         if (mentionsMe || evt.getChannel.isPrivate) {
