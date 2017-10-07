@@ -35,28 +35,28 @@ class UserMonitor(user: IUser, channel: IChannel, requiredReports: Int, actionHa
     case Event(StateTimeout, data) => stay using data.copy(reports = data.reports.drop(1))
   }
   
-  when(TimedOut) {
+  val unmuteHandler: StateFunction = {
     case Event(Unmute(msg), data) =>
       actionHandler.unmuteUser(user, channel, msg)
-      goto(Clean) using data.copy(reports = Seq.empty)
+      goto(Clean) using Data(Seq.empty, data.pastTimeouts.init) //discard last timeout because it got appealed
       
+    case Event(StateTimeout, data) => goto(Clean) using data.copy(reports = Seq.empty)
+  }
+  
+  when(TimedOut)(unmuteHandler orElse {
     case Event(Appealed(msg), data) =>
       actionHandler.appealUser(user, channel, msg)
       //calculate remaning time in timeout to specify a timer to the Appealing state
       val TimedOutData(when, duration) = data.pastTimeouts.last
       val remainingTime = duration - (Instant.now.toEpochMilli - when.toEpochMilli).millis
       goto(Appealing) forMax remainingTime
-  }
+  })
   
-  when(Appealing) {
+  when(Appealing) (unmuteHandler orElse {
     case Event(Appealed(msg), data) =>
       actionHandler.appealingProcessAlreadyStarted(user, msg)
       stay
-      
-    case Event(Unmute(msg), data) => 
-      actionHandler.unmuteUser(user, channel, msg)
-      goto(Clean) using data.copy(reports = Seq.empty)
-  }
+  })
   
   whenUnhandled {
     case Event(cmd @ (_: Appealed | _: Unmute), _) =>
