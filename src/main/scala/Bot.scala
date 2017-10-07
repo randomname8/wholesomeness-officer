@@ -108,7 +108,7 @@ object Bot extends App with UserMonitor.ActionHandler {
   val commands = collection.mutable.ListBuffer[Command]()
   case class Command(name: String, description: String, requiresModerator: Boolean = false)(val action: IMessage => PartialFunction[String, Any]) { commands += this }
   
-  Command("report <userId>", "Reports a user. USE RESPONSIBLY.")(msg => {
+  Command("report <messageId>", "Reports a message by a user. USE RESPONSIBLY.")(msg => {
       case gr"""report $idStr(\d+)""" if msg.getChannel.isPrivate =>
         val msgId = idStr.toLong
 
