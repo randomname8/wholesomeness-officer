@@ -9,13 +9,16 @@ import scala.collection.concurrent.TrieMap
 import scala.concurrent.Future
 import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.duration._
+import scala.util.control.NonFatal
 import scala.util.{Success, Failure}
 import sx.blah.discord.Discord4J
 import sx.blah.discord.api.ClientBuilder
 import sx.blah.discord.api.events.{Event, IListener}
 import sx.blah.discord.handle.impl.events.ReadyEvent
 import sx.blah.discord.handle.impl.events.guild.channel.ChannelCreateEvent
+import sx.blah.discord.handle.impl.events.guild.channel.ChannelDeleteEvent
 import sx.blah.discord.handle.impl.events.guild.channel.message.MessageReceivedEvent
+import sx.blah.discord.handle.impl.events.guild.role.RoleDeleteEvent
 import sx.blah.discord.handle.impl.obj.ReactionEmoji
 import sx.blah.discord.handle.obj.{IMessage, IUser, IChannel, IRole, Permissions}
 import sx.blah.discord.util.RequestBuffer
@@ -72,6 +75,18 @@ object Bot extends App with UserMonitor.ActionHandler {
         }
         
       case evt: ChannelCreateEvent => muteRolPerChannel(evt.getChannel) = setupMuteRolForChannel(evt.getChannel)
+      case evt: ChannelDeleteEvent => muteRolPerChannel -= evt.getChannel
+        
+      case evt: RoleDeleteEvent if muteRolPerChannel.values.exists(_ == evt.getRole) =>
+        try {
+          val channel = theGuild.getChannelsByName(evt.getRole.getName).get(0)
+          auditChannel.sendMessage("Please don't delete the roles I created! I need those for proper functioning!\nI'll recreate it now.")
+          setupMuteRolForChannel(channel)
+        } catch {
+          case NonFatal(e) => 
+            println("Could not find the channel for the rol ${evt.getRole.getName}?")
+            e.printStackTrace()
+        }
         
       case evt: MessageReceivedEvent =>
         val content = evt.getMessage.getContent
