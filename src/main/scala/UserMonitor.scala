@@ -42,11 +42,12 @@ class UserMonitor(user: IUser, channel: IChannel, requiredReports: Int, actionHa
   val unmuteHandler: StateFunction = {
     case Event(Unmute(msg), data) =>
       log.info(s"Unmuting ${user.getName} in channel ${channel.getName} under request of ${msg.getAuthor.getName}")
-      actionHandler.unmuteUser(user, channel, msg)
+      actionHandler.unmuteUser(user, channel, Some(msg))
       goto(Clean) using Data(Seq.empty, data.pastTimeouts.init) //discard last timeout because it got appealed
       
     case Event(StateTimeout, data) =>
       log.info(s"User ${user.getName} in channel ${channel.getName} completed his time out. Unmuting him.")
+      actionHandler.unmuteUser(user, channel, None)
       goto(Clean) using data.copy(reports = Seq.empty)
   }
   
@@ -109,7 +110,7 @@ object UserMonitor {
 
   trait ActionHandler {
     def muteUser(user: IUser, channel: IChannel, duration: FiniteDuration, reports: Seq[Reported]): Unit
-    def unmuteUser(user: IUser, channel: IChannel, message: IMessage): Unit
+    def unmuteUser(user: IUser, channel: IChannel, message: Option[IMessage]): Unit
     def warnUser(user: IUser, message: IMessage): Unit
     def appealUser(user: IUser, channel: IChannel, message: IMessage): Unit
     def appealingProcessAlreadyStarted(user: IUser, message: IMessage): Unit
