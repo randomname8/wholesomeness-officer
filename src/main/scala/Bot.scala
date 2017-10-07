@@ -98,6 +98,7 @@ object Bot extends App with UserMonitor.ActionHandler {
           case _ => evt.getMessage.reply(s"Sorry, I don't know the command: ${evt.getMessage.getContent}")
         }
         
+      case _ =>
     }
   }
   
