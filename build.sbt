@@ -12,6 +12,7 @@ lazy val `wholesomeness-officer` = (project in file(".")).enablePlugins(JavaAppP
       "io.github.soc" %% "regextractor" % "0.2",
       "com.typesafe.akka" %% "akka-actor" % akkaVersion,
       "com.typesafe.akka" %% "akka-typed" % akkaVersion,
+      "org.slf4j" % "slf4j-simple" % "1.7.25",
       "com.github.austinv11" % "Discord4J" % "2.9"
     ),
 
