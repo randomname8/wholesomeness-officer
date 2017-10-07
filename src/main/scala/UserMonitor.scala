@@ -1,19 +1,23 @@
-import akka.actor.{Props, FSM}
+import akka.actor.{Props, LoggingFSM, FSM}
 import java.time.Instant
 import scala.concurrent.duration._
 import sx.blah.discord.handle.obj.{IChannel, IMessage, IUser}
 
 import UserMonitor._
 
-class UserMonitor(user: IUser, channel: IChannel, requiredReports: Int, actionHandler: ActionHandler, timeoutSequence: Seq[FiniteDuration]) extends FSM[State, Data] {
+class UserMonitor(user: IUser, channel: IChannel, requiredReports: Int, actionHandler: ActionHandler, timeoutSequence: Seq[FiniteDuration]) extends LoggingFSM[State, Data] {
   startWith(Clean, Data())
   
   when(Clean) {
-    case Event(Reported(msg), data) => goto(Monitoring) using data.copy(reports = Seq(msg))
+    case Event(Reported(msg), data) => 
+      log.info(s"Got a report for ${user.getName} in channel ${channel.getName}, starting to monitor him.")
+      actionHandler.warnUser(user, msg)
+      goto(Monitoring) using data.copy(reports = Seq(msg))
   }
   
   when(Monitoring, stateTimeout = 5.minutes) {
     case NewReportEvent(Reported(msg), data @ Data(reports, pastTimeouts)) if reports.size == (requiredReports - 1) =>
+      log.info("User ${user.getName} in channel ${channel.getName} got enough reports, timing him out.")
       val now = Instant.now()
       val _24HoursBefore = now.minusSeconds(3600 * 24)
       val consideredTimeouts = pastTimeouts.dropWhile(_.when isBefore _24HoursBefore) //only consider the past 24 hours
@@ -24,8 +28,8 @@ class UserMonitor(user: IUser, channel: IChannel, requiredReports: Int, actionHa
       actionHandler.muteUser(user, channel, nextTimeout.duration, nextData.reports)
       goto(TimedOut) forMax nextTimeout.duration using nextData
       
-    case NewReportEvent(Reported(msg), data) =>
-      if (data.reports.length == 1) actionHandler.warnUser(user, msg)
+    case NewReportEvent(Reported(msg), data) => 
+      log.info(s"Received another report for ${user.getName} in channel ${channel.getName}, total: ${data.reports.length + 1}")
       stay using data.copy(data.reports :+ msg)
 
 
@@ -37,10 +41,13 @@ class UserMonitor(user: IUser, channel: IChannel, requiredReports: Int, actionHa
   
   val unmuteHandler: StateFunction = {
     case Event(Unmute(msg), data) =>
+      log.info(s"Unmuting ${user.getName} in channel ${channel.getName} under request of ${msg.getAuthor.getName}")
       actionHandler.unmuteUser(user, channel, msg)
       goto(Clean) using Data(Seq.empty, data.pastTimeouts.init) //discard last timeout because it got appealed
       
-    case Event(StateTimeout, data) => goto(Clean) using data.copy(reports = Seq.empty)
+    case Event(StateTimeout, data) =>
+      log.info(s"User ${user.getName} in channel ${channel.getName} completed his time out. Unmuting him.")
+      goto(Clean) using data.copy(reports = Seq.empty)
   }
   
   when(TimedOut)(unmuteHandler orElse {
@@ -49,6 +56,7 @@ class UserMonitor(user: IUser, channel: IChannel, requiredReports: Int, actionHa
       //calculate remaning time in timeout to specify a timer to the Appealing state
       val TimedOutData(when, duration) = data.pastTimeouts.last
       val remainingTime = duration - (Instant.now.toEpochMilli - when.toEpochMilli).millis
+      log.info(s"User ${user.getName} in channel ${channel.getName} requests an appeal. Remaining time $remainingTime")
       goto(Appealing) forMax remainingTime
   })
   
