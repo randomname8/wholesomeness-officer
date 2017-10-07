@@ -123,7 +123,7 @@ object Bot extends App with UserMonitor.ActionHandler {
             val reportedUser = reportedMsg.getAuthor
             val monitor = userMonitors.getOrElseUpdate(reportedUser, TrieMap()).getOrElseUpdate(
               reportedMsg.getChannel, actorSystem.actorOf(UserMonitor.props(reportedUser, reportedMsg.getChannel, requiredReports, Bot.this, timeoutsSequence)))
-            monitor ! UserMonitor.Reported(reportedMsg)
+            monitor ! UserMonitor.Reported(reportedMsg, msg.getAuthor)
             msg.reply(s"User ${reportedUser.getName} reported")
         }
     })
@@ -225,9 +225,9 @@ object Bot extends App with UserMonitor.ActionHandler {
     channel.overrideRolePermissions(role, EnumSet.noneOf(classOf[Permissions]), EnumSet.of(Permissions.SEND_MESSAGES, Permissions.SEND_TTS_MESSAGES))
     role
   }
-  override def muteUser(user: IUser, channel: IChannel, duration: FiniteDuration, reports: Seq[IMessage]) = {
+  override def muteUser(user: IUser, channel: IChannel, duration: FiniteDuration, reports: Seq[UserMonitor.Reported]) = {
     user.addRole(muteRolPerChannel(channel))
-    auditChannel.sendMessage(s"User ${user.getName} muted in channel ${channel.mention} for $duration. Reported by\n" + reports.map(_.getAuthor.getName).mkString("\n"))
+    auditChannel.sendMessage(s"User ${user.getName} muted in channel ${channel.mention} for $duration. Reported by\n" + reports.map(_.by.getName).mkString("\n"))
     if (!user.isBot) {
       user.getOrCreatePMChannel().sendMessage("You have been muted in ${channel.mention} for $duration after repeated reports.\n" +
                                               "If you consider this to be wrong, you can ask for an appealing processing by sending to me" +

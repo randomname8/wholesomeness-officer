@@ -9,28 +9,28 @@ class UserMonitor(user: IUser, channel: IChannel, requiredReports: Int, actionHa
   startWith(Clean, Data())
   
   when(Clean) {
-    case Event(Reported(msg), data) => 
+    case Event(r@Reported(msg, by), data) => 
       log.info(s"Got a report for ${user.getName} in channel ${channel.getName}, starting to monitor him.")
       actionHandler.warnUser(user, msg)
-      goto(Monitoring) using data.copy(reports = Seq(msg))
+      goto(Monitoring) using data.copy(reports = Seq(r))
   }
   
   when(Monitoring, stateTimeout = 5.minutes) {
-    case NewReportEvent(Reported(msg), data @ Data(reports, pastTimeouts)) if reports.size == (requiredReports - 1) =>
+    case NewReportEvent(r: Reported, data @ Data(reports, pastTimeouts)) if reports.size == (requiredReports - 1) =>
       log.info(s"User ${user.getName} in channel ${channel.getName} got enough reports, timing him out.")
       val now = Instant.now()
       val _24HoursBefore = now.minusSeconds(3600 * 24)
       val consideredTimeouts = pastTimeouts.dropWhile(_.when isBefore _24HoursBefore) //only consider the past 24 hours
       
       val nextTimeout = TimedOutData(now, timeoutSequence(consideredTimeouts.length min (timeoutSequence.length - 1)))
-      val nextData = Data(reports :+ msg, consideredTimeouts :+ nextTimeout)
+      val nextData = Data(reports :+ r, consideredTimeouts :+ nextTimeout)
       
       actionHandler.muteUser(user, channel, nextTimeout.duration, nextData.reports)
       goto(TimedOut) forMax nextTimeout.duration using nextData
       
-    case NewReportEvent(Reported(msg), data) =>
+    case NewReportEvent(r: Reported, data) =>
       log.info(s"Received another report for ${user.getName} in channel ${channel.getName}, total: ${data.reports.length + 1}")
-      stay using data.copy(data.reports :+ msg)
+      stay using data.copy(data.reports :+ r)
 
 
     //if there's only one report left, go back to clean
@@ -85,7 +85,7 @@ object UserMonitor {
   
   object NewReportEvent {
     def unapply(evt: FSM.Event[Data]): Option[(Reported, Data)] = evt match {
-      case FSM.Event(r @ Reported(msg), data @ Data(reports, _)) /* if !reports.exists(_.getAuthor.getLongID == msg.getAuthor.getLongID) */ =>
+      case FSM.Event(r @ Reported(msg, by), data @ Data(reports, _)) /* if !reports.exists(_.getAuthor.getLongID == msg.getAuthor.getLongID) */ =>
         Some(r -> data)
       case _ => None
     }
@@ -97,18 +97,18 @@ object UserMonitor {
   case object TimedOut extends State
   case object Appealing extends State
   
-  case class Data(reports: Seq[IMessage] = Seq.empty, pastTimeouts: Seq[TimedOutData] = Seq.empty)
+  case class Data(reports: Seq[Reported] = Seq.empty, pastTimeouts: Seq[TimedOutData] = Seq.empty)
   case class TimedOutData(when: Instant, duration: FiniteDuration)
   
   sealed trait Command { def message: IMessage }
-  case class Reported(message: IMessage) extends Command
+  case class Reported(message: IMessage, by: IUser) extends Command
   case class Appealed(message: IMessage) extends Command
   case class Unmute(message: IMessage) extends Command
   
   object IsMuted
 
   trait ActionHandler {
-    def muteUser(user: IUser, channel: IChannel, duration: FiniteDuration, reports: Seq[IMessage]): Unit
+    def muteUser(user: IUser, channel: IChannel, duration: FiniteDuration, reports: Seq[Reported]): Unit
     def unmuteUser(user: IUser, channel: IChannel, message: IMessage): Unit
     def warnUser(user: IUser, message: IMessage): Unit
     def appealUser(user: IUser, channel: IChannel, message: IMessage): Unit
