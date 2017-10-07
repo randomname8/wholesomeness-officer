@@ -196,8 +196,8 @@ object Bot extends App with UserMonitor.ActionHandler {
             
             val (messages, remaining) = report.foldLeft(new collection.mutable.ArrayBuffer[String](report.length) -> new StringBuilder) {
               case ((messages, currentMessage), elem) => 
-                if (currentMessage.size + elem.length < 2000) {
-                  currentMessage append elem
+                if (currentMessage.size + (elem.length + 1) < 2000) {
+                  currentMessage append elem append "\n"
                 } else {
                   messages += currentMessage.result()
                   currentMessage.clear()
