@@ -91,11 +91,14 @@ object Bot extends App with UserMonitor.ActionHandler {
         }
         
       case evt: MessageReceivedEvent =>
-        val content = evt.getMessage.getContent
-        commands.find(_.action(evt.getMessage).isDefinedAt(evt.getMessage.getContent)) match {
-          case Some(command) =>
-            command.action(evt.getMessage)(evt.getMessage.getContent)
-          case _ if evt.getChannel.isPrivate => evt.getMessage.reply(s"Sorry, I don't know the command: ${evt.getMessage.getContent}")
+        val content = evt.getMessage.getContent.replaceFirst(raw"""^\Q${client.getOurUser.mention}\E\s+""", "")
+        val mentionsMe = content.length != evt.getMessage.getContent.length
+        
+        if (mentionsMe || evt.getChannel.isPrivate) {
+          commands.find(_.action(evt.getMessage).isDefinedAt(content)) match {
+            case Some(command) => command.action(evt.getMessage)(content)
+            case _ => evt.getMessage.reply(s"Sorry, I don't know the command: ${evt.getMessage.getContent}")
+          }
         }
         
       case _ =>
@@ -146,7 +149,7 @@ object Bot extends App with UserMonitor.ActionHandler {
     })
   
   Command("unmute <userId> <channelId>", "Unmutes a timed out user", requiresModerator = true)(msg => {
-      case gr"""unmute $userStrId(\d+) $channelStrId(\d+)""" if msg.getAuthor.hasRole(moderatorRole) =>
+      case gr"""unmute $userStrId(\d+) $channelStrId(\d+)""" if msg.getAuthor.hasRole(moderatorRole) && msg.getChannel == auditChannel =>
         val validation = 
           for {
             user <- Option(theGuild.getUserByID(userStrId.toLong)) toRight "User not found"
@@ -163,7 +166,7 @@ object Bot extends App with UserMonitor.ActionHandler {
     })
   
   Command("list muted", "Shows all the people that are muted per channel", requiresModerator = true)(msg => {
-      case "list muted" if msg.getAuthor.hasRole(moderatorRole) =>
+      case "list muted" if msg.getAuthor.hasRole(moderatorRole) && msg.getChannel == auditChannel =>
         implicit val requestTimeout = Timeout(1.second)
         
         val flattenedMonitors = for {
