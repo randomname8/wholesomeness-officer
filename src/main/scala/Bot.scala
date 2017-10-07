@@ -27,8 +27,8 @@ import D4jExtensions._
 
 object Bot extends App with UserMonitor.ActionHandler {
   Discord4J.disableAudio()
-  
-  val botConfig = ConfigFactory.parseResources("bot.config")
+
+  val botConfig = ConfigFactory.parseFile(new java.io.File("conf/bot.config"))
   lazy val theGuild = client.getGuilds.get(0)
   val muteRolPerChannel = TrieMap[IChannel, IRole]()
   val userMonitors = TrieMap[IUser, TrieMap[IChannel, ActorRef]]()

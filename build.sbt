@@ -15,7 +15,9 @@ lazy val `wholesomeness-officer` = (project in file(".")).enablePlugins(JavaAppP
       "com.github.austinv11" % "Discord4J" % "2.9"
     ),
 
-    resolvers += "jitpack.io" at "https://jitpack.io"
+    resolvers += "jitpack.io" at "https://jitpack.io",
+
+    bashScriptExtraDefines += """cd "${app_home}/..""""
   )
 
 lazy val akkaVersion = "2.5.6"
