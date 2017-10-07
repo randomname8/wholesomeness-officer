@@ -17,18 +17,18 @@ class UserMonitor(user: IUser, channel: IChannel, requiredReports: Int, actionHa
   
   when(Monitoring, stateTimeout = 5.minutes) {
     case NewReportEvent(Reported(msg), data @ Data(reports, pastTimeouts)) if reports.size == (requiredReports - 1) =>
-      log.info("User ${user.getName} in channel ${channel.getName} got enough reports, timing him out.")
+      log.info(s"User ${user.getName} in channel ${channel.getName} got enough reports, timing him out.")
       val now = Instant.now()
       val _24HoursBefore = now.minusSeconds(3600 * 24)
       val consideredTimeouts = pastTimeouts.dropWhile(_.when isBefore _24HoursBefore) //only consider the past 24 hours
       
-      val nextTimeout = TimedOutData(now, timeoutSequence(consideredTimeouts.length max timeoutSequence.length))
+      val nextTimeout = TimedOutData(now, timeoutSequence(consideredTimeouts.length min (timeoutSequence.length - 1)))
       val nextData = Data(reports :+ msg, consideredTimeouts :+ nextTimeout)
       
       actionHandler.muteUser(user, channel, nextTimeout.duration, nextData.reports)
       goto(TimedOut) forMax nextTimeout.duration using nextData
       
-    case NewReportEvent(Reported(msg), data) => 
+    case NewReportEvent(Reported(msg), data) =>
       log.info(s"Received another report for ${user.getName} in channel ${channel.getName}, total: ${data.reports.length + 1}")
       stay using data.copy(data.reports :+ msg)
 
@@ -85,7 +85,7 @@ object UserMonitor {
   
   object NewReportEvent {
     def unapply(evt: FSM.Event[Data]): Option[(Reported, Data)] = evt match {
-      case FSM.Event(r @ Reported(msg), data @ Data(reports, _)) if !reports.exists(_.getAuthor.getLongID == msg.getAuthor.getLongID) =>
+      case FSM.Event(r @ Reported(msg), data @ Data(reports, _)) /* if !reports.exists(_.getAuthor.getLongID == msg.getAuthor.getLongID) */ =>
         Some(r -> data)
       case _ => None
     }
