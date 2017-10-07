@@ -1,4 +1,4 @@
-lazy val `wholesomeness-officer` = (project in file(".")).
+lazy val `wholesomeness-officer` = (project in file(".")).enablePlugins(JavaAppPackaging).
   settings(
     inThisBuild(List(
       organization := "wholesomeness-officer",
