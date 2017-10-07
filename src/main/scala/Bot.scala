@@ -2,6 +2,7 @@ import akka.actor.{ActorRef, ActorSystem}
 import akka.pattern.ask
 import akka.util.Timeout
 import com.typesafe.config.ConfigFactory
+import java.util.EnumSet
 import regex._
 import scala.collection.JavaConverters._
 import scala.collection.concurrent.TrieMap
@@ -13,8 +14,10 @@ import sx.blah.discord.Discord4J
 import sx.blah.discord.api.ClientBuilder
 import sx.blah.discord.api.events.{Event, IListener}
 import sx.blah.discord.handle.impl.events.ReadyEvent
+import sx.blah.discord.handle.impl.events.guild.channel.ChannelCreateEvent
 import sx.blah.discord.handle.impl.events.guild.channel.message.MessageReceivedEvent
-import sx.blah.discord.handle.obj.{IMessage, IUser, IChannel}
+import sx.blah.discord.handle.impl.obj.ReactionEmoji
+import sx.blah.discord.handle.obj.{IMessage, IUser, IChannel, IRole, Permissions}
 import sx.blah.discord.util.RequestBuffer
 
 import D4jExtensions._
@@ -38,8 +41,9 @@ object Bot extends App with UserMonitor.ActionHandler {
     def nextOpt(): Option[T] = if (i.hasNext) Some(i.next) else None
   }
   
-  val userMonitors = TrieMap[IUser, TrieMap[IChannel, ActorRef]]()
   lazy val theGuild = client.getGuilds.get(0)
+  val muteRolPerChannel = TrieMap[IChannel, IRole]()
+  val userMonitors = TrieMap[IUser, TrieMap[IChannel, ActorRef]]()
   lazy val auditChannel = theGuild.getChannelByID(botConfig.getLong("bot.auditChannel"))
   lazy val moderatorRole = theGuild.getRoleByID(botConfig.getLong("bot.moderatorRol"))
   val requiredReports = botConfig.getInt("bot.requiredReports")
@@ -60,7 +64,14 @@ object Bot extends App with UserMonitor.ActionHandler {
           println(s"Configured moderator rol ${botConfig.getLong("bot.moderatorRol")} not found")
           sys.exit(1)
         }
+        theGuild.getChannels.asScala foreach { channel =>
+          theGuild.getRolesByName(s"${channel.getStringID}-muted").asScala.headOption match {
+            case Some(role) => muteRolPerChannel(channel) = role
+            case _ => muteRolPerChannel(channel) = setupMuteRolForChannel(channel)
+          }
+        }
         
+      case evt: ChannelCreateEvent => muteRolPerChannel(evt.getChannel) = setupMuteRolForChannel(evt.getChannel)
         
       case evt: MessageReceivedEvent =>
         val content = evt.getMessage.getContent
@@ -183,22 +194,29 @@ object Bot extends App with UserMonitor.ActionHandler {
         msg.reply("```\n" + helpString.toString + "```")
     })
   
-  override def muteUser(user: IUser, duration: FiniteDuration, reports: Seq[IMessage]) = {
-    
+  def setupMuteRolForChannel(channel: IChannel): IRole = {
+    val role = theGuild.createRole()
+    role.edit(java.awt.Color.red, false, s"${channel.getStringID}-muted", EnumSet.noneOf(classOf[Permissions]), true)
+    channel.overrideRolePermissions(role, EnumSet.noneOf(classOf[Permissions]), EnumSet.of(Permissions.SEND_MESSAGES, Permissions.SEND_TTS_MESSAGES))
+    role
   }
-  override def unmuteUser(user: IUser) = {
+  override def muteUser(user: IUser, channel: IChannel, duration: FiniteDuration, reports: Seq[IMessage]) = {
+    user.addRole(muteRolPerChannel(channel))
+    auditChannel.sendMessage(s"User ${user.getName} muted in channel ${channel.mention} for $duration. Reported by\n" + reports.map(_.getAuthor.getName).mkString("\n"))
+  }
+  override def unmuteUser(user: IUser, channel: IChannel) = {
+    user.removeRole(muteRolPerChannel(channel))
+    auditChannel.sendMessage(s"User ${user.getName} unmuted.")
     
   }
   override def warnUser(user: IUser, message: IMessage) = {
-    
+    message.addReaction(ReactionEmoji of "🚦")
+  }
+  def appealUser(user: IUser, channel: IChannel, message: IMessage): Unit = {
+    message.reply("Appeal process initiated. You'll have to wait for the team of moderators to review your case.")
+    auditChannel.sendMessage(s"${moderatorRole.mention}, user ${user.getName} requested an appeal to the timeout he received in channel ${channel.mention}.")
   }
   override def notifyUserNotTimedOut(user: IUser, message: IMessage, channel: IChannel) = {
       message.reply(s"User ${user.getName} is not timed out in channel ${channel.getName}")
   }
-  
-//  def appeal(request: IMessage, timeout: TimedOut): Unit = {
-//    request.reply("Appeal process initiated. You'll have to wait for the team of moderators to review your case.")
-//    auditChannel.sendMessage(s"${moderatorRol.mention}, user ${request.getAuthor.mention} requested an appeal to the timeout he received in channel ${timeout.channel.mention}." + 
-//                             s" The following users triggered the report:\n" + timeout.reports.map(m => s"${m.getAuthor.mention}: ${m.getTimestamp}").mkString("\n"))
-//  }
 }

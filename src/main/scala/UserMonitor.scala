@@ -41,7 +41,7 @@ class UserMonitor(user: IUser, channel: IChannel, requiredReports: Int, actionHa
       goto(Clean) using data.copy(reports = Seq.empty)
       
     case Event(Appealed(msg), data) =>
-      actionHandler.appealUser(user, channel)
+      actionHandler.appealUser(user, channel, msg)
       //calculate remaning time in timeout to specify a timer to the Appealing state
       val TimedOutData(when, duration) = data.pastTimeouts.last
       val remainingTime = duration - (Instant.now.toEpochMilli - when.toEpochMilli).millis
@@ -104,7 +104,7 @@ object UserMonitor {
     def muteUser(user: IUser, channel: IChannel, duration: FiniteDuration, reports: Seq[IMessage]): Unit
     def unmuteUser(user: IUser, channel: IChannel, message: IMessage): Unit
     def warnUser(user: IUser, message: IMessage): Unit
-    def appealUser(user: IUser, channel: IChannel): Unit
+    def appealUser(user: IUser, channel: IChannel, message: IMessage): Unit
     def appealingProcessAlreadyStarted(user: IUser, message: IMessage): Unit
     def notifyUserNotTimedOut(user: IUser, message: IMessage, channel: IChannel): Unit
   }
