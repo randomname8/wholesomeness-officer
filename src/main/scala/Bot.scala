@@ -95,7 +95,7 @@ object Bot extends App with UserMonitor.ActionHandler {
         commands.find(_.action(evt.getMessage).isDefinedAt(evt.getMessage.getContent)) match {
           case Some(command) =>
             command.action(evt.getMessage)(evt.getMessage.getContent)
-          case _ => evt.getMessage.reply(s"Sorry, I don't know the command: ${evt.getMessage.getContent}")
+          case _ if evt.getChannel.isPrivate => evt.getMessage.reply(s"Sorry, I don't know the command: ${evt.getMessage.getContent}")
         }
         
       case _ =>
