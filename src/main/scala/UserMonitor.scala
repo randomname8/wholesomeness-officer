@@ -29,19 +29,23 @@ class UserMonitor(user: IUser, channel: IChannel, requiredReports: Int, actionHa
       goto(TimedOut) forMax nextTimeout.duration using nextData
       
     case NewReportEvent(r: Reported, data) =>
-      log.info(s"Received another report for ${user.getName} in channel ${channel.getName}, total: ${data.reports.length + 1}")
+      log.info(s"Received another report for ${user.getName} in channel ${channel.getName}, total: ${data.reports.length + 1}.")
       stay using data.copy(data.reports :+ r)
 
 
     //if there's only one report left, go back to clean
-    case Event(StateTimeout, Data(Seq(_), pastTimeouts)) => goto(Clean) using Data(pastTimeouts = pastTimeouts)
+    case Event(StateTimeout, Data(Seq(_), pastTimeouts)) =>
+      log.info(s"All reports for ${user.getName} in channel ${channel.getName} were expired, going back to clean state.")
+      goto(Clean) using Data(pastTimeouts = pastTimeouts)
     //otherwise reduce the reports by one
-    case Event(StateTimeout, data) => stay using data.copy(reports = data.reports.drop(1))
+    case Event(StateTimeout, data) =>
+      log.info(s"Cleaning a report for ${user.getName} in channel ${channel.getName} after 5 minutes with no reports.")
+      stay using data.copy(reports = data.reports.drop(1))
   }
   
   val unmuteHandler: StateFunction = {
     case Event(Unmute(msg), data) =>
-      log.info(s"Unmuting ${user.getName} in channel ${channel.getName} under request of ${msg.getAuthor.getName}")
+      log.info(s"Unmuting ${user.getName} in channel ${channel.getName} under request of ${msg.getAuthor.getName}.")
       actionHandler.unmuteUser(user, channel, Some(msg))
       goto(Clean) using Data(Seq.empty, data.pastTimeouts.init) //discard last timeout because it got appealed
       
