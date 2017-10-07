@@ -36,6 +36,7 @@ object Bot extends App with UserMonitor.ActionHandler {
   lazy val moderatorRole = theGuild.getRolesByName(botConfig.getString("bot.moderatorRol")).get(0)
   val requiredReports = botConfig.getInt("bot.requiredReports")
   val timeoutsSequence = botConfig.getStringList("bot.timeoutsSequence").asScala.map(Duration.apply).collect { case d: FiniteDuration => d }.toSeq
+  val reportExpiration = Duration(botConfig.getString("bot.reportExpiration")).asInstanceOf[FiniteDuration]
   
   val actorSystem = ActorSystem()
   
@@ -122,7 +123,7 @@ object Bot extends App with UserMonitor.ActionHandler {
           case Some(reportedMsg) =>
             val reportedUser = reportedMsg.getAuthor
             val monitor = userMonitors.getOrElseUpdate(reportedUser, TrieMap()).getOrElseUpdate(
-              reportedMsg.getChannel, actorSystem.actorOf(UserMonitor.props(reportedUser, reportedMsg.getChannel, requiredReports, Bot.this, timeoutsSequence)))
+              reportedMsg.getChannel, actorSystem.actorOf(UserMonitor.props(reportedUser, reportedMsg.getChannel, requiredReports, Bot.this, timeoutsSequence, reportExpiration)))
             monitor ! UserMonitor.Reported(reportedMsg, msg.getAuthor)
             msg.reply(s"User ${reportedUser.getName} reported")
         }

@@ -5,7 +5,8 @@ import sx.blah.discord.handle.obj.{IChannel, IMessage, IUser}
 
 import UserMonitor._
 
-class UserMonitor(user: IUser, channel: IChannel, requiredReports: Int, actionHandler: ActionHandler, timeoutSequence: Seq[FiniteDuration]) extends LoggingFSM[State, Data] {
+class UserMonitor(user: IUser, channel: IChannel, requiredReports: Int, actionHandler: ActionHandler,
+                  timeoutSequence: Seq[FiniteDuration], reportExpiration: FiniteDuration) extends LoggingFSM[State, Data] {
   startWith(Clean, Data())
   
   when(Clean) {
@@ -15,7 +16,7 @@ class UserMonitor(user: IUser, channel: IChannel, requiredReports: Int, actionHa
       goto(Monitoring) using data.copy(reports = Seq(r))
   }
   
-  when(Monitoring, stateTimeout = 5.minutes) {
+  when(Monitoring, stateTimeout = reportExpiration) {
     case NewReportEvent(r: Reported, data @ Data(reports, pastTimeouts)) if reports.size == (requiredReports - 1) =>
       log.info(s"User ${user.getName} in channel ${channel.getName} got enough reports, timing him out.")
       val now = Instant.now()
@@ -85,8 +86,8 @@ class UserMonitor(user: IUser, channel: IChannel, requiredReports: Int, actionHa
   }
 }
 object UserMonitor {
-  def props(user: IUser, channel: IChannel, requiredReports: Int, actionHandler: ActionHandler, timeOutSequence: Seq[FiniteDuration]) = 
-    Props(new UserMonitor(user, channel, requiredReports, actionHandler, timeOutSequence))
+  def props(user: IUser, channel: IChannel, requiredReports: Int, actionHandler: ActionHandler, timeOutSequence: Seq[FiniteDuration], reportExpiration: FiniteDuration) = 
+    Props(new UserMonitor(user, channel, requiredReports, actionHandler, timeOutSequence, reportExpiration))
   
   object NewReportEvent {
     def unapply(evt: FSM.Event[Data]): Option[(Reported, Data)] = evt match {
