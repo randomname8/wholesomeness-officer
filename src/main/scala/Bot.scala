@@ -28,7 +28,7 @@ import D4jExtensions._
 object Bot extends App with UserMonitor.ActionHandler {
   Discord4J.disableAudio()
   
-  val botConfig = ConfigFactory.load("bot.config")
+  val botConfig = ConfigFactory.parseResources("bot.config")
   lazy val theGuild = client.getGuilds.get(0)
   val muteRolPerChannel = TrieMap[IChannel, IRole]()
   val userMonitors = TrieMap[IUser, TrieMap[IChannel, ActorRef]]()
@@ -74,7 +74,7 @@ object Bot extends App with UserMonitor.ActionHandler {
             case _ => muteRolPerChannel(channel) = setupMuteRolForChannel(channel)
           }
         }
-        println(Console.GREEN + s"Initialized.\n  Audit channel: ${auditChannel.getName}\n  Moderator role: ${moderatorRole.getName}\n  Timeout sequence: ${timeoutsSequence mkString ", "}")
+        println(Console.GREEN + s"Initialized.\n  Audit channel: ${auditChannel.getName}\n  Moderator role: ${moderatorRole.getName}\n  Timeout sequence: ${timeoutsSequence mkString ", "}" + Console.RESET)
         
       case evt: ChannelCreateEvent => muteRolPerChannel(evt.getChannel) = setupMuteRolForChannel(evt.getChannel)
       case evt: ChannelDeleteEvent => muteRolPerChannel -= evt.getChannel
