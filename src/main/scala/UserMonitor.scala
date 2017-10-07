@@ -91,7 +91,7 @@ object UserMonitor {
   
   object NewReportEvent {
     def unapply(evt: FSM.Event[Data]): Option[(Reported, Data)] = evt match {
-      case FSM.Event(r @ Reported(msg, by), data @ Data(reports, _)) /* if !reports.exists(_.getAuthor.getLongID == msg.getAuthor.getLongID) */ =>
+      case FSM.Event(r @ Reported(msg, by), data @ Data(reports, _)) if !reports.exists(_.by.getLongID == msg.getAuthor.getLongID) =>
         Some(r -> data)
       case _ => None
     }
