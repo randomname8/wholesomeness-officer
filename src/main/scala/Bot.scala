@@ -29,6 +29,13 @@ object Bot extends App with UserMonitor.ActionHandler {
   Discord4J.disableAudio()
   
   val botConfig = ConfigFactory.load("bot.config")
+  lazy val theGuild = client.getGuilds.get(0)
+  val muteRolPerChannel = TrieMap[IChannel, IRole]()
+  val userMonitors = TrieMap[IUser, TrieMap[IChannel, ActorRef]]()
+  lazy val auditChannel = theGuild.getChannelByID(botConfig.getLong("bot.auditChannel"))
+  lazy val moderatorRole = theGuild.getRoleByID(botConfig.getLong("bot.moderatorRol"))
+  val requiredReports = botConfig.getInt("bot.requiredReports")
+  val timeoutsSequence = botConfig.getStringList("bot.timeoutsSequence").asScala.map(Duration.apply).collect { case d: FiniteDuration => d }.toSeq
   
   val actorSystem = ActorSystem()
   
@@ -44,12 +51,6 @@ object Bot extends App with UserMonitor.ActionHandler {
     def nextOpt(): Option[T] = if (i.hasNext) Some(i.next) else None
   }
   
-  lazy val theGuild = client.getGuilds.get(0)
-  val muteRolPerChannel = TrieMap[IChannel, IRole]()
-  val userMonitors = TrieMap[IUser, TrieMap[IChannel, ActorRef]]()
-  lazy val auditChannel = theGuild.getChannelByID(botConfig.getLong("bot.auditChannel"))
-  lazy val moderatorRole = theGuild.getRoleByID(botConfig.getLong("bot.moderatorRol"))
-  val requiredReports = botConfig.getInt("bot.requiredReports")
   
   object DiscordListener extends IListener[Event] {
     
@@ -73,6 +74,7 @@ object Bot extends App with UserMonitor.ActionHandler {
             case _ => muteRolPerChannel(channel) = setupMuteRolForChannel(channel)
           }
         }
+        println(Console.GREEN + s"Initialized.\n  Audit channel: ${auditChannel.getName}\n  Moderator role: ${moderatorRole.getName}\n  Timeout sequence: ${timeoutsSequence mkString ", "}")
         
       case evt: ChannelCreateEvent => muteRolPerChannel(evt.getChannel) = setupMuteRolForChannel(evt.getChannel)
       case evt: ChannelDeleteEvent => muteRolPerChannel -= evt.getChannel
@@ -112,7 +114,7 @@ object Bot extends App with UserMonitor.ActionHandler {
           case Some(reportedMsg) =>
             val reportedUser = reportedMsg.getAuthor
             val monitor = userMonitors.getOrElseUpdate(reportedUser, TrieMap()).getOrElse(
-              reportedMsg.getChannel, actorSystem.actorOf(UserMonitor.props(reportedUser, reportedMsg.getChannel, requiredReports, Bot.this)))
+              reportedMsg.getChannel, actorSystem.actorOf(UserMonitor.props(reportedUser, reportedMsg.getChannel, requiredReports, Bot.this, timeoutsSequence)))
             monitor ! UserMonitor.Reported(reportedMsg)
             msg.reply(s"User ${reportedUser.getName} reported")
         }
@@ -218,8 +220,11 @@ object Bot extends App with UserMonitor.ActionHandler {
   override def muteUser(user: IUser, channel: IChannel, duration: FiniteDuration, reports: Seq[IMessage]) = {
     user.addRole(muteRolPerChannel(channel))
     auditChannel.sendMessage(s"User ${user.getName} muted in channel ${channel.mention} for $duration. Reported by\n" + reports.map(_.getAuthor.getName).mkString("\n"))
+    user.getOrCreatePMChannel().sendMessage("You have been muted in ${channel.mention} for $duration after repeated reports.\n" +
+                                            "If you consider this to be wrong, you can ask for an appealing processing by sending to me" +
+                                            "```appeal ${channel.getStringID}```")
   }
-  override def unmuteUser(user: IUser, channel: IChannel) = {
+  override def unmuteUser(user: IUser, channel: IChannel, message: IMessage) = {
     user.removeRole(muteRolPerChannel(channel))
     auditChannel.sendMessage(s"User ${user.getName} unmuted.")
     
@@ -233,5 +238,8 @@ object Bot extends App with UserMonitor.ActionHandler {
   }
   override def notifyUserNotTimedOut(user: IUser, message: IMessage, channel: IChannel) = {
       message.reply(s"User ${user.getName} is not timed out in channel ${channel.getName}")
+  }
+  override def appealingProcessAlreadyStarted(user: IUser, message: IMessage): Unit = {
+    message.reply("The appealing process has already been started.")
   }
 }

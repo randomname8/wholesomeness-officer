@@ -5,7 +5,7 @@ import sx.blah.discord.handle.obj.{IChannel, IMessage, IUser}
 
 import UserMonitor._
 
-class UserMonitor(user: IUser, channel: IChannel, requiredReports: Int, actionHandler: ActionHandler) extends FSM[State, Data] {
+class UserMonitor(user: IUser, channel: IChannel, requiredReports: Int, actionHandler: ActionHandler, timeoutSequence: Seq[FiniteDuration]) extends FSM[State, Data] {
   startWith(Clean, Data())
   
   when(Clean) {
@@ -18,7 +18,7 @@ class UserMonitor(user: IUser, channel: IChannel, requiredReports: Int, actionHa
       val _24HoursBefore = now.minusSeconds(3600 * 24)
       val consideredTimeouts = pastTimeouts.dropWhile(_.when isBefore _24HoursBefore) //only consider the past 24 hours
       
-      val nextTimeout = TimedOutData(now, TimeOutSequence(consideredTimeouts.length max TimeOutSequence.length))
+      val nextTimeout = TimedOutData(now, timeoutSequence(consideredTimeouts.length max timeoutSequence.length))
       val nextData = Data(reports :+ msg, consideredTimeouts :+ nextTimeout)
       
       actionHandler.muteUser(user, channel, nextTimeout.duration, nextData.reports)
@@ -72,7 +72,8 @@ class UserMonitor(user: IUser, channel: IChannel, requiredReports: Int, actionHa
   }
 }
 object UserMonitor {
-  def props(user: IUser, channel: IChannel, requiredReports: Int, actionHandler: ActionHandler) = Props(new UserMonitor(user, channel, requiredReports, actionHandler))
+  def props(user: IUser, channel: IChannel, requiredReports: Int, actionHandler: ActionHandler, timeOutSequence: Seq[FiniteDuration]) = 
+    Props(new UserMonitor(user, channel, requiredReports, actionHandler, timeOutSequence))
   
   object NewReportEvent {
     def unapply(evt: FSM.Event[Data]): Option[(Reported, Data)] = evt match {
@@ -98,8 +99,6 @@ object UserMonitor {
   
   object IsMuted
 
-  val TimeOutSequence = Array(5.minutes, 15.minutes, 1.hour, 3.hours, 24.hours)
-  
   trait ActionHandler {
     def muteUser(user: IUser, channel: IChannel, duration: FiniteDuration, reports: Seq[IMessage]): Unit
     def unmuteUser(user: IUser, channel: IChannel, message: IMessage): Unit
