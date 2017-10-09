@@ -121,6 +121,7 @@ object Bot extends App with UserMonitor.ActionHandler {
         Option(theGuild.getMessageByID(msgId)) orElse 
         theGuild.getChannels.asScala.iterator.flatMap(c => Option(c.getMessageByID(msgId))).nextOpt() match {
           case None => msg.reply("Message not found.")
+          case Some(reportedMsg) if reportedMsg.getAuthor.getLongID == msg.getAuthor.getLongID => msg.reply("You are trying to report yourself.")
           case Some(reportedMsg) =>
             val reportedUser = reportedMsg.getAuthor
             val monitor = userMonitors.getOrElseUpdate(reportedUser, TrieMap()).getOrElseUpdate(
