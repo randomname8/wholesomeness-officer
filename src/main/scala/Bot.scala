@@ -92,7 +92,7 @@ object Bot extends App with UserMonitor.ActionHandler {
           setupMuteRolForChannel(channel)
         } catch {
           case NonFatal(e) => 
-            println("Could not find the channel for the rol ${evt.getRole.getName}?")
+            println(s"Could not find the channel for the rol ${evt.getRole.getName}?")
             e.printStackTrace()
         }
         
@@ -231,9 +231,9 @@ object Bot extends App with UserMonitor.ActionHandler {
     user.addRole(muteRolPerChannel(channel))
     auditChannel.sendMessage(s"User ${user.getName} muted in channel ${channel.mention} for $duration. Reported by\n" + reports.map(_.by.getName).mkString("\n"))
     if (!user.isBot) {
-      user.getOrCreatePMChannel().sendMessage("You have been muted in ${channel.mention} for $duration after repeated reports.\n" +
+      user.getOrCreatePMChannel().sendMessage(s"You have been muted in ${channel.mention} for $duration after repeated reports.\n" +
                                               "If you consider this to be wrong, you can ask for an appealing processing by sending to me" +
-                                              "```appeal ${channel.getStringID}```")
+                                              s"```appeal ${channel.getStringID}```")
     }
   }
   override def unmuteUser(user: IUser, channel: IChannel, message: Option[IMessage]) = {
