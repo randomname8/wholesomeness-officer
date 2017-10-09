@@ -239,7 +239,7 @@ object Bot extends App with UserMonitor.ActionHandler {
   }
   override def unmuteUser(user: IUser, channel: IChannel, message: Option[IMessage]) = {
     user.removeRole(muteRolPerChannel(channel))
-    val descr = message.fold("on timeout expiration.")(m => s" on request of ${m.getAuthor.mention}")
+    val descr = message.fold("on timeout expiration.")(m => s"on request of ${m.getAuthor.mention}")
     auditChannel.sendMessage(s"User ${user.getName} unmuted $descr.")
     
   }
