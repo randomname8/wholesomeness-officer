@@ -80,7 +80,7 @@ class UserMonitor(user: IUser, channel: IChannel, requiredReports: Int, actionHa
     case Event(IsMuted, data) =>
       stateName match {
         case TimedOut | Appealing => sender ! data.pastTimeouts.last
-        case _ => sender ! ()
+        case _ => sender ! (())
       }
       stay
   }
@@ -91,7 +91,7 @@ object UserMonitor {
   
   object NewReportEvent {
     def unapply(evt: FSM.Event[Data]): Option[(Reported, Data)] = evt match {
-      case FSM.Event(r @ Reported(msg, by), data @ Data(reports, _)) if !reports.exists(_.by.getLongID == msg.getAuthor.getLongID) =>
+      case FSM.Event(r @ Reported(msg, by), data @ Data(reports, _)) if !reports.exists(_.by.getLongID == by.getLongID) =>
         Some(r -> data)
       case _ => None
     }
