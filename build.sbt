@@ -13,9 +13,10 @@ lazy val `wholesomeness-officer` = (project in file(".")).enablePlugins(JavaAppP
       "com.typesafe.akka" %% "akka-actor" % akkaVersion,
       "com.typesafe.akka" %% "akka-typed" % akkaVersion,
       "org.slf4j" % "slf4j-simple" % "1.7.25",
-      "com.github.austinv11" % "Discord4J" % "2.9"
+      "com.github.austinv11" %% "Discord4J" % "2.9.1"
     ),
 
+    resolvers += "jcenter" at "http://jcenter.bintray.com",
     resolvers += "jitpack.io" at "https://jitpack.io",
 
     bashScriptExtraDefines += """cd "${app_home}/..""""
