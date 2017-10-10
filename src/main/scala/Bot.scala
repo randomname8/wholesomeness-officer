@@ -30,16 +30,16 @@ object Bot extends App with UserMonitor.ActionHandler {
 
   val botConfig = ConfigFactory.parseFile(new java.io.File("conf/bot.config"))
   lazy val theGuild = client.getGuilds.get(0)
-  val muteRolPerChannel = TrieMap[IChannel, IRole]()
+  val muteRolePerChannel = TrieMap[IChannel, IRole]()
   val userMonitors = TrieMap[IUser, TrieMap[IChannel, ActorRef]]()
   lazy val auditChannel = theGuild.getChannelByID(botConfig.getLong("bot.auditChannel"))
   lazy val moderatorRole = theGuild.getRolesByName(botConfig.getString("bot.moderatorRol")).get(0)
   val requiredReports = botConfig.getInt("bot.requiredReports")
   val timeoutsSequence = botConfig.getStringList("bot.timeoutsSequence").asScala.map(Duration.apply).collect { case d: FiniteDuration => d }.toSeq
   val reportExpiration = Duration(botConfig.getString("bot.reportExpiration")).asInstanceOf[FiniteDuration]
-  
+
   val actorSystem = ActorSystem()
-  
+
   val client = new ClientBuilder().withToken(botConfig.getString("bot.token")).
     setMaxMessageCacheCount(100).
     withMinimumDispatchThreads(1).
@@ -51,10 +51,10 @@ object Bot extends App with UserMonitor.ActionHandler {
   implicit class IteratorExt[T](val i: Iterator[T]) extends AnyVal {
     def nextOpt(): Option[T] = if (i.hasNext) Some(i.next) else None
   }
-  
-  
+
+
   object DiscordListener extends IListener[Event] {
-    
+
     def handle(event: Event) = event match {
       case evt: ReadyEvent =>
         if (client.getGuilds.size != 1) {
@@ -71,8 +71,8 @@ object Bot extends App with UserMonitor.ActionHandler {
         }
         theGuild.getChannels.asScala foreach { channel =>
           theGuild.getRolesByName(s"${channel.getStringID}-muted").asScala.headOption match {
-            case Some(role) => muteRolPerChannel(channel) = role
-            case _ => muteRolPerChannel(channel) = setupMuteRoleForChannel(channel)
+            case Some(role) => muteRolePerChannel(channel) = role
+            case _ => muteRolePerChannel(channel) = setupMuteRoleForChannel(channel)
           }
         }
         println(Console.GREEN + s"""Initialized.
@@ -82,13 +82,13 @@ object Bot extends App with UserMonitor.ActionHandler {
   Required reports for timeout: $requiredReports
   Report expiration: $reportExpiration""" + Console.RESET)
 
-      case evt: ChannelCreateEvent => muteRolPerChannel(evt.getChannel) = setupMuteRoleForChannel(evt.getChannel)
-      case evt: ChannelDeleteEvent => muteRolPerChannel -= evt.getChannel
+      case evt: ChannelCreateEvent => muteRolePerChannel(evt.getChannel) = setupMuteRoleForChannel(evt.getChannel)
+      case evt: ChannelDeleteEvent => muteRolePerChannel -= evt.getChannel
 
-      case evt: RoleDeleteEvent if muteRolPerChannel.values.exists(_ == evt.getRole) =>
+      case evt: RoleDeleteEvent if muteRolePerChannel.values.exists(_ == evt.getRole) =>
         try {
           val channel = theGuild.getChannelsByName(evt.getRole.getName).get(0)
-          auditChannel.sendMessage("Please don't delete the roles I created! I need those for proper functioning!\nI'll recreate it now.")
+          auditChannel.sendMessage("Please don't delete the roles I created! I need those for proper functioning!\nI'll recreate them now.")
           setupMuteRoleForChannel(channel)
         } catch {
           case NonFatal(e) =>
@@ -114,7 +114,7 @@ object Bot extends App with UserMonitor.ActionHandler {
   val commands = collection.mutable.ListBuffer[Command]()
   case class Command(name: String, description: String, requiresModerator: Boolean = false)(val action: IMessage => PartialFunction[String, Any]) { commands += this }
 
-  Command("report <messageId>", "Reports a message by a user. USE RESPONSIBLY.")(msg => {
+  Command("report <message ID>", "Reports a message by a user by the message ID. USE RESPONSIBLY.")(msg => {
       case gr"""report $idStr(\d+)""" if msg.getChannel.isPrivate =>
         val msgId = idStr.toLong
 
@@ -131,7 +131,7 @@ object Bot extends App with UserMonitor.ActionHandler {
         }
     })
 
-  Command("appeal[ channelId]", "If you believe you have been wrongly timed out.")(msg => {
+  Command("appeal [channel ID]", "Use if you believe you have been wrongly timed out. This is manually reviewed by the moderators.")(msg => {
       case gr"""appeal(?: $idStr(\d+))?""" if msg.getChannel.isPrivate =>
         val chosenChannel = idStr.map {
           case str @ gr"\\d+" => Option(theGuild.getChannelByID(str.toLong))
@@ -148,14 +148,14 @@ object Bot extends App with UserMonitor.ActionHandler {
               timeouts.size match {
                 case 1 => timeouts.head._2 ! UserMonitor.Appealed(msg)
                 case 0 => msg.reply("You are not timed out")
-                case other => msg.reply("You're timed out in multiple channels, you need to tell me for which channel you wish to appeal by doing `appeal channelId` where `channelId` can be either the snowflake id of the channel, or the channel name (assuming it is unique)")
+                case other => msg.reply("You're timed out in multiple channels, you need to tell me for which channel you wish to appeal by doing `appeal <channel ID>` where `<channel ID>` can be either the snowflake ID of the channel, or the channel name (assuming it is unique)")
               }
             }
         }
 
     })
 
-  Command("unmute <userId> <channelId>", "Unmutes a timed out user", requiresModerator = true)(msg => {
+  Command("unmute <user ID> <channel ID>", "Unmutes a timed out user.", requiresModerator = true)(msg => {
       case gr"""unmute $userStrId(\d+) $channelStrId(\d+)""" if msg.getAuthor.hasRole(moderatorRole) && msg.getChannel == auditChannel =>
         val validation =
           for {
@@ -172,7 +172,7 @@ object Bot extends App with UserMonitor.ActionHandler {
 
     })
 
-  Command("list muted", "Shows all the people that are muted per channel", requiresModerator = true)(msg => {
+  Command("list muted", "Shows all the people that are muted per channel.", requiresModerator = true)(msg => {
       case "list muted" if msg.getAuthor.hasRole(moderatorRole) && msg.getChannel == auditChannel =>
         implicit val requestTimeout = Timeout(1.second)
 
@@ -187,7 +187,7 @@ object Bot extends App with UserMonitor.ActionHandler {
             val totalTimedOuts = timedOutUsers.size
 
             val report = new collection.mutable.ArrayBuffer[String](10)
-            report += s"Total timed out users **$totalTimedOuts**."
+            report += s"Total number of timed out users **$totalTimedOuts**."
 
             for {
               (channel, users) <- timedOutUsers.groupBy(_._2.getName)
@@ -229,31 +229,31 @@ object Bot extends App with UserMonitor.ActionHandler {
     role
   }
   override def muteUser(user: IUser, channel: IChannel, duration: FiniteDuration, reports: Seq[UserMonitor.Reported]) = {
-    user.addRole(muteRolPerChannel(channel))
-    auditChannel.sendMessage(s"User ${user.getName} muted in channel ${channel.mention} for $duration. Reported by\n" + reports.map(_.by.getName).mkString("\n"))
+    user.addRole(muteRolePerChannel(channel))
+    auditChannel.sendMessage(s"User ${user.getName} has been muted in channel ${channel.mention} for $duration. Reported by:\n" + reports.map(_.by.getName).mkString("\n"))
     if (!user.isBot) {
       user.getOrCreatePMChannel().sendMessage(s"You have been muted in ${channel.mention} for $duration after repeated reports.\n" +
-                                              "If you consider this to be wrong, you can ask for an appealing processing by sending to me" +
+                                              "If you consider this to be wrong, you can ask for an appeal by DMing me" +
                                               s"```appeal ${channel.getStringID}```")
     }
   }
   override def unmuteUser(user: IUser, channel: IChannel, message: Option[IMessage]) = {
-    user.removeRole(muteRolPerChannel(channel))
+    user.removeRole(muteRolePerChannel(channel))
     val descr = message.fold("on timeout expiration.")(m => s"on request of ${m.getAuthor.mention}")
     auditChannel.sendMessage(s"User ${user.getName} unmuted $descr.")
-    
+
   }
   override def warnUser(user: IUser, message: IMessage) = {
     message.addReaction(ReactionEmoji of "⚠")
   }
   def appealUser(user: IUser, channel: IChannel, message: IMessage): Unit = {
     message.reply("Appeal process initiated. You'll have to wait for the team of moderators to review your case.")
-    auditChannel.sendMessage(s"${moderatorRole.mention}, user ${user.getName} requested an appeal to the timeout he received in channel ${channel.mention}.")
+    auditChannel.sendMessage(s"${moderatorRole.mention}, user ${user.getName} requested an appeal to the timeout they received in channel ${channel.mention}.")
   }
   override def notifyUserNotTimedOut(user: IUser, message: IMessage, channel: IChannel) = {
       message.reply(s"User ${user.getName} is not timed out in channel ${channel.getName}")
   }
   override def appealingProcessAlreadyStarted(user: IUser, message: IMessage): Unit = {
-    message.reply("The appealing process has already been started.")
+    message.reply("The appealing process has already been started. Please be patient.")
   }
 }
