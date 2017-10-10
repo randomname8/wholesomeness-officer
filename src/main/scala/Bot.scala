@@ -72,7 +72,7 @@ object Bot extends App with UserMonitor.ActionHandler {
         theGuild.getChannels.asScala foreach { channel =>
           theGuild.getRolesByName(s"${channel.getStringID}-muted").asScala.headOption match {
             case Some(role) => muteRolPerChannel(channel) = role
-            case _ => muteRolPerChannel(channel) = setupMuteRolForChannel(channel)
+            case _ => muteRolPerChannel(channel) = setupMuteRoleForChannel(channel)
           }
         }
         println(Console.GREEN + s"""Initialized.
@@ -81,44 +81,44 @@ object Bot extends App with UserMonitor.ActionHandler {
   Timeout sequence: ${timeoutsSequence mkString ", "}
   Required reports for timeout: $requiredReports
   Report expiration: $reportExpiration""" + Console.RESET)
-        
-      case evt: ChannelCreateEvent => muteRolPerChannel(evt.getChannel) = setupMuteRolForChannel(evt.getChannel)
+
+      case evt: ChannelCreateEvent => muteRolPerChannel(evt.getChannel) = setupMuteRoleForChannel(evt.getChannel)
       case evt: ChannelDeleteEvent => muteRolPerChannel -= evt.getChannel
-        
+
       case evt: RoleDeleteEvent if muteRolPerChannel.values.exists(_ == evt.getRole) =>
         try {
           val channel = theGuild.getChannelsByName(evt.getRole.getName).get(0)
           auditChannel.sendMessage("Please don't delete the roles I created! I need those for proper functioning!\nI'll recreate it now.")
-          setupMuteRolForChannel(channel)
+          setupMuteRoleForChannel(channel)
         } catch {
-          case NonFatal(e) => 
-            println(s"Could not find the channel for the rol ${evt.getRole.getName}?")
+          case NonFatal(e) =>
+            println(s"Could not find the channel for the role ${evt.getRole.getName}?")
             e.printStackTrace()
         }
-        
+
       case evt: MessageReceivedEvent =>
         val content = evt.getMessage.getContent.replaceFirst(raw"""^\Q${client.getOurUser.mention(false)}\E\s+""", "")
         val mentionsMe = content.length != evt.getMessage.getContent.length
-        
+
         if (mentionsMe || evt.getChannel.isPrivate) {
           commands.find(_.action(evt.getMessage).isDefinedAt(content)) match {
             case Some(command) => command.action(evt.getMessage)(content)
             case _ => evt.getMessage.reply(s"Sorry, I don't know the command: ${evt.getMessage.getContent}")
           }
         }
-        
+
       case _ =>
     }
   }
-  
+
   val commands = collection.mutable.ListBuffer[Command]()
   case class Command(name: String, description: String, requiresModerator: Boolean = false)(val action: IMessage => PartialFunction[String, Any]) { commands += this }
-  
+
   Command("report <messageId>", "Reports a message by a user. USE RESPONSIBLY.")(msg => {
       case gr"""report $idStr(\d+)""" if msg.getChannel.isPrivate =>
         val msgId = idStr.toLong
 
-        Option(theGuild.getMessageByID(msgId)) orElse 
+        Option(theGuild.getMessageByID(msgId)) orElse
         theGuild.getChannels.asScala.iterator.flatMap(c => Option(c.getMessageByID(msgId))).nextOpt() match {
           case None => msg.reply("Message not found.")
           case Some(reportedMsg) if reportedMsg.getAuthor.getLongID == msg.getAuthor.getLongID => msg.reply("You are trying to report yourself.")
@@ -130,7 +130,7 @@ object Bot extends App with UserMonitor.ActionHandler {
             msg.reply(s"User ${reportedUser.getName} reported")
         }
     })
-  
+
   Command("appeal[ channelId]", "If you believe you have been wrongly timed out.")(msg => {
       case gr"""appeal(?: $idStr(\d+))?""" if msg.getChannel.isPrivate =>
         val chosenChannel = idStr.map {
@@ -139,7 +139,7 @@ object Bot extends App with UserMonitor.ActionHandler {
         }
 
         chosenChannel match {
-          case Some(Some(chosen)) => 
+          case Some(Some(chosen)) =>
             userMonitors.get(msg.getAuthor).flatMap(_.get(chosen)).fold[Unit](
               msg.reply(s"You are not timed out in channel ${chosen.getName}"))(_ ! UserMonitor.Appealed(msg))
           case Some(None) => msg.reply("Channel not found")
@@ -152,12 +152,12 @@ object Bot extends App with UserMonitor.ActionHandler {
               }
             }
         }
-        
+
     })
-  
+
   Command("unmute <userId> <channelId>", "Unmutes a timed out user", requiresModerator = true)(msg => {
       case gr"""unmute $userStrId(\d+) $channelStrId(\d+)""" if msg.getAuthor.hasRole(moderatorRole) && msg.getChannel == auditChannel =>
-        val validation = 
+        val validation =
           for {
             user <- Option(theGuild.getUserByID(userStrId.toLong)) toRight "User not found"
             channel <- Option(theGuild.getChannelByID(channelStrId.toLong)) toRight "Channel not found"
@@ -167,36 +167,36 @@ object Bot extends App with UserMonitor.ActionHandler {
               case _ => notifyUserNotTimedOut(user, msg, channel)
             }
           }
-        
+
         validation.left.foreach(res => msg.reply(res))
-        
+
     })
-  
+
   Command("list muted", "Shows all the people that are muted per channel", requiresModerator = true)(msg => {
       case "list muted" if msg.getAuthor.hasRole(moderatorRole) && msg.getChannel == auditChannel =>
         implicit val requestTimeout = Timeout(1.second)
-        
+
         val flattenedMonitors = for {
           (user, monitors) <- userMonitors
           (channel, monitor) <- monitors
         } yield (monitor ? UserMonitor.IsMuted) map ((user, channel, _))
-        
+
         Future.sequence(flattenedMonitors).onComplete {
           case Success(flattenedMonitors) =>
             val timedOutUsers = flattenedMonitors.collect { case (user, channel, data: UserMonitor.TimedOutData) => (user, channel, data) }.toVector
             val totalTimedOuts = timedOutUsers.size
-            
+
             val report = new collection.mutable.ArrayBuffer[String](10)
             report += s"Total timed out users **$totalTimedOuts**."
-            
+
             for {
               (channel, users) <- timedOutUsers.groupBy(_._2.getName)
               _ = report += s"Channel **$channel**:"
               (user, _, data) <- users
             } report += s"  ${user.getName} (${user.getNicknameForGuild(theGuild)}) until ${data.when.plusMillis(data.duration.toMillis)}"
-            
+
             val (messages, remaining) = report.foldLeft(new collection.mutable.ArrayBuffer[String](report.length) -> new StringBuilder) {
-              case ((messages, currentMessage), elem) => 
+              case ((messages, currentMessage), elem) =>
                 if (currentMessage.size + (elem.length + 1) < 2000) {
                   currentMessage append elem append "\n"
                 } else {
@@ -207,22 +207,22 @@ object Bot extends App with UserMonitor.ActionHandler {
             }
             if (remaining.nonEmpty) messages += remaining.result()
             messages foreach (part => RequestBuffer.request(() => msg.reply(part)))
-            
+
           case Failure(ex) => msg.reply("Something went wrong:\n```" + ex.getStackTrace.mkString("\n") + "```")
         }
     })
-  
+
   Command("help", "Prints this help message")(msg => {
       case "help" =>
         val toShow = if (msg.getAuthor.hasRole(moderatorRole)) commands else commands.filterNot(_.requiresModerator)
-        
+
         val maxCmdWidth = toShow.map(_.name.length).max
         val helpString = new StringBuilder
         toShow foreach (c => helpString.append(c.name.padTo(maxCmdWidth, ' ')).append(" - ").append(c.description).append("\n"))
         msg.reply("```\n" + helpString.toString + "```")
     })
-  
-  def setupMuteRolForChannel(channel: IChannel): IRole = {
+
+  def setupMuteRoleForChannel(channel: IChannel): IRole = {
     val role = theGuild.createRole()
     role.edit(java.awt.Color.red, false, s"${channel.getStringID}-muted", EnumSet.noneOf(classOf[Permissions]), true)
     channel.overrideRolePermissions(role, EnumSet.noneOf(classOf[Permissions]), EnumSet.of(Permissions.SEND_MESSAGES, Permissions.SEND_TTS_MESSAGES))
